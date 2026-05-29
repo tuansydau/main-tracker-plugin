@@ -30,7 +30,8 @@ public class MainTrackerPlugin extends Plugin {
 
 //	@Inject
 //	private MainTrackerConfig config;
-	private static final int SECONDS_BETWEEN_UPLOADS = 10;
+	private static final int SECONDS_BETWEEN_SKILL_UPLOADS = 10;
+	private static final int SECONDS_BETWEEN_QUEST_UPLOADS = 120;
 	private static final String MAINTRACKER_API_URL = "http://localhost:8000/ingest";
 	OkHttpClient httpClient = new OkHttpClient();
 	public static final MediaType JSON = MediaType.get("application/json");
@@ -62,20 +63,35 @@ public class MainTrackerPlugin extends Plugin {
 		}
 	}
 
-	@Schedule(period = SECONDS_BETWEEN_UPLOADS, unit = ChronoUnit.SECONDS)
+	@Schedule(period = SECONDS_BETWEEN_SKILL_UPLOADS, unit = ChronoUnit.SECONDS)
 	public void updateSkills() throws IOException {
+		uploadSnapshot(false);
+	}
+
+	@Schedule(period = SECONDS_BETWEEN_QUEST_UPLOADS, unit = ChronoUnit.SECONDS)
+	public void updateQuests() throws IOException {
+		uploadSnapshot(true);
+	}
+
+	private void uploadSnapshot(boolean includeQuests) throws IOException {
 		if (notLoggedIn()) {
 			return;
 		}
 
+		HashMap<String, Object> snapshot = buildSnapshot(includeQuests);
+		postUserData(MAINTRACKER_API_URL, gson.toJson(snapshot));
+	}
+
+	private HashMap<String, Object> buildSnapshot(boolean includeQuests) {
 		String displayName = client.getLauncherDisplayName();
 		HashMap<String, Object> snapshot = new HashMap<>();
 		snapshot.put("accountHash", Long.toString(client.getAccountHash()));
 		snapshot.put("displayName", displayName != null ? displayName : "");
 		snapshot.put("skills", new XpState(client).get());
-
-		String requestObject = gson.toJson(snapshot);
-		postUserData(MAINTRACKER_API_URL, requestObject);
+		if (includeQuests) {
+			snapshot.put("quests", new QuestsState(client).get());
+		}
+		return snapshot;
 	}
 
 	@Provides
